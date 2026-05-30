@@ -28,6 +28,20 @@ MAX_DISTANCE_THRESHOLD = 60
 MAX_LOST_FRAMES = 20         
 
 
+def reset_backend_records() -> None:
+    """Clear all previous detection records so each run starts clean.
+
+    Best-effort: if the backend is unreachable we warn but still continue,
+    so the video stream can run even without the API.
+    """
+    try:
+        resp = requests.delete(API_ENDPOINT, timeout=2.0)
+        deleted = resp.json().get("deleted", "?")
+        print(f"[INFO] Cleared {deleted} old record(s) from backend.")
+    except requests.exceptions.RequestException:
+        print("[WARN] Could not reach backend to reset records (continuing anyway).")
+
+
 def send_payload_async(payload: dict) -> None:
     """Send detection payload to the API in a non-blocking manner."""
     try:
@@ -53,7 +67,12 @@ def main() -> None:
         sys.exit(1)
 
     print(f"[INFO] Model loaded: {MODEL_PATH}")
-    print(f"[INFO] Multi-Object Centroid Tracking Active | Camera: {CAMERA_ID}")
+    print(f"[INFO] Video opened: {VIDEO_PATH}")
+    print(f"[INFO] Tracker: ByteTrack | Camera: {CAMERA_ID}")
+
+    # Start each run from a clean slate on the backend
+    reset_backend_records()
+
     print(f"[INFO] Press 'q' to quit.\n")
 
     frame_count = 0

@@ -97,6 +97,25 @@ def create_detection(payload: DetectionPayload):
         db.close()
 
 
+@app.delete("/api/qc/detections")
+def reset_detections():
+    """Delete ALL detection records.
+
+    Called by the edge camera once at startup so each detection run begins
+    from a clean slate (prevents duplicate track_ids accumulating across runs).
+    """
+    db = SessionLocal()
+    try:
+        deleted = db.query(Detection).delete()
+        db.commit()
+        return {"status": "ok", "deleted": deleted}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
 @app.get("/api/inventory")
 def get_inventory(min_confidence: float = 0.0, limit: int | None = None):
     """Return detections ordered by timestamp DESC with counts.
