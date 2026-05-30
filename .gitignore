@@ -22,6 +22,15 @@ yarn-error.log*
 .env*.local
 .env
 
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# SQLite database (runtime data, not source)
+*.db
+
 # MCP configuration (contains tokens)
 .vscode/mcp.json
 .kiro/settings/mcp.json
