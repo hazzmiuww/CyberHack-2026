@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ActionIcon,
   Alert,
   Badge,
   Box,
@@ -13,10 +14,12 @@ import {
   Table,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconAlertTriangle,
   IconCheck,
+  IconPackage,
   IconRefresh,
   IconStack2,
   IconX,
@@ -24,11 +27,21 @@ import {
 import { useInventory } from "@/lib/qc/use-inventory";
 import type { Detection } from "@/lib/qc/types";
 import { QualityCard } from "./QualityCard";
+import { KenangLogo } from "./KenangLogo";
 
 const BRAND = "#4A55A2";
 const BRAND_MUTED = "#7986CB";
 const GOOD = "#2E7D6F";
 const BAD = "#C0544A";
+
+function timeAgo(date: Date | null): string {
+  if (!date) return "—";
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 5) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  return `${mins}m ago`;
+}
 
 function StatCard({
   label,
@@ -46,7 +59,7 @@ function StatCard({
       withBorder
       p="md"
       radius="md"
-      style={{ borderColor: "rgba(121,134,203,0.25)" }}
+      style={{ borderColor: "rgba(121,134,203,0.25)", background: "#ffffff" }}
     >
       <Group gap="sm" wrap="nowrap">
         <Box
@@ -146,7 +159,10 @@ function DetectionRow({ d }: { d: Detection }) {
 }
 
 export default function QcDashboardPage() {
-  const { data, loading, error, refresh } = useInventory({ pollMs: 4000, limit: 50 });
+  const { data, loading, error, lastUpdated, refresh } = useInventory({
+    pollMs: 4000,
+    limit: 50,
+  });
 
   const total = data?.total ?? 0;
   const good = data?.material_bagus_count ?? 0;
@@ -168,24 +184,60 @@ export default function QcDashboardPage() {
       <Box style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px 64px" }}>
         <Stack gap="lg">
           {/* Header */}
-          <Group justify="space-between" align="flex-end">
-            <Stack gap={2}>
-              <Title order={2} style={{ color: BRAND, fontWeight: 800 }}>
-                QC Command Center
-              </Title>
-              <Text style={{ color: BRAND_MUTED, fontSize: 14 }}>
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <Stack gap={6}>
+              <Group gap="sm" align="center">
+                <KenangLogo size={30} />
+                <Box
+                  style={{
+                    width: 1,
+                    height: 22,
+                    background: "rgba(121,134,203,0.35)",
+                  }}
+                />
+                <Title order={3} style={{ color: BRAND, fontWeight: 800 }}>
+                  QC Command Center
+                </Title>
+              </Group>
+              <Text style={{ color: BRAND_MUTED, fontSize: 13 }}>
                 Live material quality analysis · Sima Arome
               </Text>
             </Stack>
-            <Group
-              gap={6}
-              style={{ color: BRAND_MUTED, fontSize: 12, cursor: "pointer" }}
-              onClick={refresh}
-            >
-              <IconRefresh size={14} />
-              <Text style={{ fontSize: 12 }}>Refresh</Text>
-              {loading && <Loader size={12} color={BRAND_MUTED} />}
-            </Group>
+
+            <Stack gap={8} align="flex-end">
+              {/* LIVE indicator */}
+              <Group gap={6} align="center">
+                <Box className="qc-live-dot" />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    color: GOOD,
+                    fontFamily: "var(--ds-font-mono, 'JetBrains Mono', monospace)",
+                  }}
+                >
+                  LIVE
+                </Text>
+                <Tooltip label="Refresh now">
+                  <ActionIcon
+                    variant="subtle"
+                    color="indigo"
+                    onClick={refresh}
+                    aria-label="Refresh data"
+                  >
+                    {loading ? (
+                      <Loader size={14} color={BRAND_MUTED} />
+                    ) : (
+                      <IconRefresh size={16} color={BRAND_MUTED} />
+                    )}
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+              <Text style={{ fontSize: 11, color: "#9aa0c4" }}>
+                Updated {timeAgo(lastUpdated)}
+              </Text>
+            </Stack>
           </Group>
 
           {error && (
@@ -200,7 +252,7 @@ export default function QcDashboardPage() {
           )}
 
           {/* Metric cards */}
-          <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="md">
+          <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="md" className="qc-fade-in">
             <StatCard
               label="Total Scanned"
               value={total}
@@ -242,7 +294,7 @@ export default function QcDashboardPage() {
             withBorder
             radius="md"
             p="md"
-            style={{ borderColor: "rgba(121,134,203,0.25)" }}
+            style={{ borderColor: "rgba(121,134,203,0.25)", background: "#ffffff" }}
           >
             <Group justify="space-between">
               <Text style={{ color: BRAND_MUTED, fontSize: 13, fontWeight: 600 }}>
@@ -263,22 +315,54 @@ export default function QcDashboardPage() {
 
           {/* Detection log */}
           <Stack gap="xs">
-            <Text style={{ color: BRAND, fontWeight: 800, fontSize: 16 }}>
-              Recent Detections
-            </Text>
+            <Group justify="space-between" align="center">
+              <Text style={{ color: BRAND, fontWeight: 800, fontSize: 16 }}>
+                Recent Detections
+              </Text>
+              {detections.length > 0 && (
+                <Badge
+                  variant="light"
+                  styles={{
+                    root: {
+                      background: "rgba(74,85,162,0.1)",
+                      color: BRAND,
+                    },
+                  }}
+                >
+                  {detections.length} shown
+                </Badge>
+              )}
+            </Group>
             <Paper
               withBorder
               radius="md"
-              style={{ borderColor: "rgba(121,134,203,0.25)", overflow: "hidden" }}
+              style={{ borderColor: "rgba(121,134,203,0.25)", overflow: "hidden", background: "#ffffff" }}
             >
               {detections.length === 0 ? (
-                <Box p="xl">
-                  <Text ta="center" style={{ color: BRAND_MUTED, fontSize: 14 }}>
-                    {loading
-                      ? "Loading detections…"
-                      : "No detections recorded yet. Run the edge camera to populate data."}
+                <Stack align="center" gap="sm" p={48}>
+                  <Box
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 16,
+                      background: "rgba(121,134,203,0.1)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconPackage size={28} color={BRAND_MUTED} />
+                  </Box>
+                  <Text ta="center" style={{ color: BRAND_MUTED, fontSize: 14, fontWeight: 600 }}>
+                    {loading ? "Loading detections…" : "No detections yet"}
                   </Text>
-                </Box>
+                  {!loading && (
+                    <Text ta="center" style={{ color: "#9aa0c4", fontSize: 12, maxWidth: 280 }}>
+                      Run the edge camera (edge_camera.py) to start streaming
+                      quality detections into the dashboard.
+                    </Text>
+                  )}
+                </Stack>
               ) : (
                 <ScrollArea h={360}>
                   <Table highlightOnHover stickyHeader>

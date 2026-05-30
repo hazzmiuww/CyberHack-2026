@@ -14,6 +14,7 @@ interface UseInventoryState {
   data: InventoryResponse | null;
   loading: boolean;
   error: string | null;
+  lastUpdated: Date | null;
   refresh: () => void;
 }
 
@@ -27,6 +28,7 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventorySta
   const [data, setData] = useState<InventoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isMounted = useRef(true);
 
   const fetchData = useCallback(async () => {
@@ -43,6 +45,7 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventorySta
       } else {
         setData(json);
         setError(null);
+        setLastUpdated(new Date());
       }
     } catch {
       if (isMounted.current) setError("Network error while loading inventory.");
@@ -67,5 +70,5 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventorySta
     };
   }, [fetchData, pollMs]);
 
-  return { data, loading, error, refresh: fetchData };
+  return { data, loading, error, lastUpdated, refresh: fetchData };
 }
