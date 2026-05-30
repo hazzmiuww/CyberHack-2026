@@ -15,13 +15,28 @@ from ultralytics import YOLO
 
 # --- Configuration ---
 MODEL_PATH = "best.pt"
-VIDEO_PATH = "Timelapse Lemon.mp4"
-API_ENDPOINT = "http://localhost:8000/api/qc/detections"
+VIDEO_PATH = "sample_lemon.mp4"
+API_BASE = "http://localhost:8000"
+API_ENDPOINT = f"{API_BASE}/api/qc/detections"
 CAMERA_ID = "cam_01"
 CONFIDENCE_THRESHOLD = 0.45
 
 # --- Global deduplication state ---
 processed_track_ids: set[int] = set()
+
+
+def reset_backend_records() -> None:
+    """Clear all previous detection records so each run starts clean.
+
+    Best-effort: if the backend is unreachable we warn but still continue,
+    so the video stream can run even without the API.
+    """
+    try:
+        resp = requests.delete(API_ENDPOINT, timeout=2.0)
+        deleted = resp.json().get("deleted", "?")
+        print(f"[INFO] Cleared {deleted} old record(s) from backend.")
+    except requests.exceptions.RequestException:
+        print("[WARN] Could not reach backend to reset records (continuing anyway).")
 
 
 def send_payload_async(payload: dict) -> None:
@@ -54,6 +69,10 @@ def main() -> None:
     print(f"[INFO] Model loaded: {MODEL_PATH}")
     print(f"[INFO] Video opened: {VIDEO_PATH}")
     print(f"[INFO] Tracker: ByteTrack | Camera: {CAMERA_ID}")
+
+    # Start each run from a clean slate on the backend
+    reset_backend_records()
+
     print(f"[INFO] Press 'q' to quit.\n")
 
     frame_count = 0
