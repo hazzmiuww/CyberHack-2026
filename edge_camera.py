@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 # --- Configuration ---
 MODEL_PATH = "best.pt"
-VIDEO_PATH = "sample_lemon.mp4"   # set to 0 for a live webcam
+VIDEO_PATH = 0   # set to 0 for a live webcam
 API_BASE = "http://localhost:8000"
 API_ENDPOINT = f"{API_BASE}/api/qc/detections"
 CAMERA_ID = "cam_01"

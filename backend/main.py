@@ -9,10 +9,13 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Float, desc
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+import os
 import uvicorn
 
 # --- Database Setup ---
-DATABASE_URL = "sqlite:///./sima_qc.db"
+# Allow overriding the DB location via env var (Railway uses an ephemeral disk;
+# for persistence you can mount a volume and point DATABASE_URL at it).
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sima_qc.db")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -199,4 +202,7 @@ def get_stats():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Railway (and most hosts) inject the port via the PORT env var.
+    # Fall back to 8000 for local development.
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
