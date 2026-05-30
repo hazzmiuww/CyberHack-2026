@@ -21,9 +21,11 @@ from ultralytics import YOLO
 # --- Configuration ---
 MODEL_PATH = "best.pt"
 VIDEO_PATH = 0   # set to 0 for a live webcam, or "sample_lemon.mp4" for the demo video
-# Backend base URL. Override with env var QC_BACKEND_URL to send detections to
-# the deployed Railway backend; defaults to local dev.
-API_BASE = os.getenv("QC_BACKEND_URL", "http://localhost:8000")
+# Backend base URL.
+# Default points at the deployed Railway backend so detections show up on the
+# live Vercel dashboard out of the box. Override with env var QC_BACKEND_URL
+# (e.g. set QC_BACKEND_URL=http://localhost:8000) to target a local backend.
+API_BASE = os.getenv("QC_BACKEND_URL", "https://cyberhack-2026-production.up.railway.app")
 API_ENDPOINT = f"{API_BASE}/api/qc/detections"
 CAMERA_ID = "cam_01"
 CONFIDENCE_THRESHOLD = 0.45
@@ -109,6 +111,7 @@ def main() -> None:
     print(f"[INFO] Model loaded: {MODEL_PATH}")
     print(f"[INFO] Video opened: {VIDEO_PATH}")
     print(f"[INFO] Tracker: ByteTrack | Camera: {CAMERA_ID}")
+    print(f"[INFO] Sending detections to: {API_ENDPOINT}")
 
     # Start each run from a clean slate on the backend
     reset_backend_records()
