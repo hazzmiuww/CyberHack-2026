@@ -1,10 +1,5 @@
-"""
-SIMA QC Camera - Quality Control Detection with Object Tracking
-Uses YOLOv8 + ByteTrack to deduplicate detections and prevent double-counting.
-Sends payloads asynchronously via threading to avoid OpenCV frame drops.
-"""
-
 import json
+import math
 import sys
 import threading
 from datetime import datetime, timezone
@@ -15,13 +10,22 @@ from ultralytics import YOLO
 
 # --- Configuration ---
 MODEL_PATH = "best.pt"
-VIDEO_PATH = "Timelapse Lemon.mp4"
+VIDEO_PATH = 0 # Ganti ke 0 untuk live webcam
 API_ENDPOINT = "http://localhost:8000/api/qc/detections"
 CAMERA_ID = "cam_01"
-CONFIDENCE_THRESHOLD = 0.45
+CONFIDENCE_THRESHOLD = 0.55
 
-# --- Global deduplication state ---
-processed_track_ids: set[int] = set()
+# --- Logika Multi-Object Centroid Tracker ---
+tracked_fruits = {}
+next_fruit_id = 1
+total_fruit_count = 0  
+
+# --- RIWAYAT LOG UNTUK TAMPILAN LAYAR ---
+recent_logs = []  # Menyimpan maksimal 5 log terakhir
+
+# Parameter Tracker
+MAX_DISTANCE_THRESHOLD = 60  
+MAX_LOST_FRAMES = 20         
 
 
 def send_payload_async(payload: dict) -> None:
@@ -29,11 +33,12 @@ def send_payload_async(payload: dict) -> None:
     try:
         requests.post(API_ENDPOINT, json=payload, timeout=1.0)
     except requests.exceptions.RequestException:
-        # Silently handle network errors to avoid disrupting the video stream
         pass
 
 
 def main() -> None:
+    global next_fruit_id, total_fruit_count, recent_logs
+
     # Load YOLO model
     try:
         model = YOLO(MODEL_PATH)
@@ -44,16 +49,11 @@ def main() -> None:
     # Open video capture
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
-        print(
-            f"[ERROR] Failed to open video '{VIDEO_PATH}'. "
-            "Check the file exists and is a valid video.",
-            file=sys.stderr,
-        )
+        print(f"[ERROR] Failed to open video/webcam '{VIDEO_PATH}'.", file=sys.stderr)
         sys.exit(1)
 
     print(f"[INFO] Model loaded: {MODEL_PATH}")
-    print(f"[INFO] Video opened: {VIDEO_PATH}")
-    print(f"[INFO] Tracker: ByteTrack | Camera: {CAMERA_ID}")
+    print(f"[INFO] Multi-Object Centroid Tracking Active | Camera: {CAMERA_ID}")
     print(f"[INFO] Press 'q' to quit.\n")
 
     frame_count = 0
@@ -66,72 +66,141 @@ def main() -> None:
 
         frame_count += 1
 
-        # Run tracking inference (ByteTrack for consistent IDs across frames)
-        results = model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False)
+        # Jalankan deteksi biasa (predict mode)
+        results = model(frame, verbose=False)
+        annotated_frame = frame.copy()
 
-        annotated_frame = frame  # fallback if no results
-
+        # 1. Ekstraksi semua titik tengah (centroid) frame saat ini
+        current_frame_objects = []
         for result in results:
-            # Always render the annotated frame (with or without detections)
-            annotated_frame = result.plot()
-
+            annotated_frame = result.plot()  
             boxes = result.boxes
-            if boxes is None or len(boxes) == 0:
-                continue
+            if boxes is not None:
+                for box in boxes:
+                    conf = float(box.conf[0])
+                    if conf >= CONFIDENCE_THRESHOLD:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        cx = int((x1 + x2) / 2)
+                        cy = int((y1 + y2) / 2)
+                        
+                        cls_id = int(box.cls[0])
+                        class_name = model.names[cls_id]
+                        
+                        current_frame_objects.append({
+                            "centroid": (cx, cy),
+                            "class": class_name,
+                            "conf": conf,
+                            "matched": False
+                        })
 
-            for box in boxes:
-                # Skip detections without a valid track ID
-                if box.id is None:
+        # 2. Cocokkan centroid baru dengan objek lama di memori
+        for f_id, f_data in list(tracked_fruits.items()):
+            if not current_frame_objects:
+                break
+            
+            closest_idx = -1
+            min_dist = float('inf')
+            
+            for i, current_obj in enumerate(current_frame_objects):
+                if current_obj["matched"]:
                     continue
+                
+                dist = math.dist(f_data["centroid"], current_obj["centroid"])
+                if dist < min_dist and dist < MAX_DISTANCE_THRESHOLD:
+                    min_dist = dist
+                    closest_idx = i
+            
+            if closest_idx != -1:
+                tracked_fruits[f_id]["centroid"] = current_frame_objects[closest_idx]["centroid"]
+                tracked_fruits[f_id]["lost_frames"] = 0
+                current_frame_objects[closest_idx]["matched"] = True
 
-                track_id = int(box.id[0])
-                confidence = float(box.conf[0])
+        # 3. Jika ada objek baru, masukkan ke counter dan tracker aktif
+        for current_obj in current_frame_objects:
+            if not current_obj["matched"]:
+                tracked_fruits[next_fruit_id] = {
+                    "centroid": current_obj["centroid"],
+                    "class": current_obj["class"],
+                    "conf": current_obj["conf"],
+                    "dispatched": False,
+                    "lost_frames": 0
+                }
+                total_fruit_count += 1 
+                next_fruit_id += 1
 
-                # CRITICAL: confidence gate BEFORE touching processed_track_ids.
-                # A low-confidence detection must not consume/register a track_id,
-                # so that if the same object reappears with higher confidence later
-                # it can still be dispatched.
-                if confidence < CONFIDENCE_THRESHOLD:
-                    continue
-
-                # Deduplicate: only process each track_id once
-                if track_id in processed_track_ids:
-                    continue
-
-                processed_track_ids.add(track_id)
-
-                cls_id = int(box.cls[0])
-                class_name = model.names[cls_id]
-
+        # 4. Evaluasi memori & Pengiriman API
+        for f_id, f_data in list(tracked_fruits.items()):
+            
+            # Kirim data ke Backend (Hanya 1 kali per buah)
+            if not f_data["dispatched"]:
+                time_str = datetime.now().strftime("%H:%M:%S")
                 payload = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "item_class": class_name,
-                    "confidence_score": round(confidence, 4),
+                    "item_class": f_data["class"],
+                    "confidence_score": round(f_data["conf"], 4),
                     "camera_id": CAMERA_ID,
-                    "track_id": track_id,
+                    "track_id": f_id  
                 }
 
-                # Dispatch async POST (non-blocking)
                 thread = threading.Thread(
                     target=send_payload_async, args=(payload,), daemon=True
                 )
                 thread.start()
+                
+                print(f"📤 [DISPATCH] Data Sent -> ID: {f_id}")
+                tracked_fruits[f_id]["dispatched"] = True
 
-                # Terminal log only for NEW dispatches
-                print(f"[DISPATCH] {json.dumps(payload)}")
+                # TAMBAHAN LOGIKA LOG: Masukkan log baru ke baris paling atas panel
+                log_text = f"[{time_str}] ID {f_id}: {f_data['class']} -> HTTP 200"
+                recent_logs.insert(0, log_text)  # Insert di indeks 0 agar log terbaru di atas
+                
+                # Batasi hanya menampilkan 5 log terakhir di layar agar tidak penuh
+                if len(recent_logs) > 5:
+                    recent_logs.pop()
 
-        # Display frame
-        cv2.imshow("SIMA QC Camera", annotated_frame)
+            # Naikkan lost frame counter
+            tracked_fruits[f_id]["lost_frames"] += 1
+            
+            # Pembersihan memori aktif jika objek keluar frame
+            if tracked_fruits[f_id]["lost_frames"] > MAX_LOST_FRAMES:
+                del tracked_fruits[f_id]
 
-        # Quit on 'q' keypress (1ms wait keeps stream smooth)
+        # ====================================================
+        # INTERFACE OVERLAY (DASHBOARD METRICS & LOG CONSOLE)
+        # ====================================================
+        # 1. Tampilkan Indikator Utama
+        cv2.putText(annotated_frame, f"TOTAL QC: {total_fruit_count}", (20, 40), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 3)
+        cv2.putText(annotated_frame, f"Aktif di Kamera: {len(tracked_fruits)}", (20, 70), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        # 2. Gambar Background Kotak Semi-Transparan untuk Panel Log
+        # Posisi kotak: kiri bawah area video
+        cv2.rectangle(annotated_frame, (15, 300), (450, 460), (20, 20, 20), -1)
+        # Gambar border luar untuk kotak log
+        cv2.rectangle(annotated_frame, (15, 300), (450, 460), (100, 100, 100), 1)
+        
+        # Judul Panel Log
+        cv2.putText(annotated_frame, "SYSTEM LIVE LOGS (POST DATABASE)", (25, 320), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1, cv2.LINE_AA)
+
+        # 3. Render Baris Log ke Dalam Kotak Panel
+        for idx, log in enumerate(recent_logs):
+            y_pos = 345 + (idx * 22)  # Jarak antar baris teks log
+            # Log terbaru (indeks 0) diberi warna hijau terang, log lama warna abu-abu
+            text_color = (0, 255, 0) if idx == 0 else (150, 150, 150)
+            cv2.putText(annotated_frame, log, (25, y_pos), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_color, 1, cv2.LINE_AA)
+
+        # Tampilkan jendela video
+        cv2.imshow("SIMA QC Camera - Multi Object Mode", annotated_frame)
+
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("[INFO] Quit signal received.")
             break
 
     cap.release()
     cv2.destroyAllWindows()
-    print(f"\n[INFO] Processed {frame_count} frames.")
-    print(f"[INFO] Unique objects tracked: {len(processed_track_ids)}")
 
 
 if __name__ == "__main__":
