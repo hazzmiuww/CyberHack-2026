@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
  * configurable via QC_BACKEND_URL so it can point at localhost in dev or a
  * deployed backend in production.
  */
-const BACKEND_URL = process.env.QC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.QC_BACKEND_URL || "https://cyberhack-2026-production.up.railway.app";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

@@ -9,6 +9,7 @@ confidence-gate-before-tracking architecture.
 """
 
 import json
+import os
 import sys
 import threading
 from datetime import datetime, timezone
@@ -19,8 +20,10 @@ from ultralytics import YOLO
 
 # --- Configuration ---
 MODEL_PATH = "best.pt"
-VIDEO_PATH = 0   # set to 0 for a live webcam
-API_BASE = "http://localhost:8000"
+VIDEO_PATH = 0   # set to 0 for a live webcam, or "sample_lemon.mp4" for the demo video
+# Backend base URL. Override with env var QC_BACKEND_URL to send detections to
+# the deployed Railway backend; defaults to local dev.
+API_BASE = os.getenv("QC_BACKEND_URL", "http://localhost:8000")
 API_ENDPOINT = f"{API_BASE}/api/qc/detections"
 CAMERA_ID = "cam_01"
 CONFIDENCE_THRESHOLD = 0.45
