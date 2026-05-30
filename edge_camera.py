@@ -1,5 +1,14 @@
+"""
+SIMA QC Camera - Quality Control Detection with Object Tracking
+Uses YOLOv8 + ByteTrack to deduplicate detections and prevent double-counting.
+Sends payloads asynchronously via threading to avoid OpenCV frame drops.
+
+Includes an on-screen dashboard overlay (total QC count, active tracks, live log panel)
+for a presentable demo, while keeping the robust ByteTrack pipeline and the
+confidence-gate-before-tracking architecture.
+"""
+
 import json
-import math
 import sys
 import threading
 from datetime import datetime, timezone
@@ -10,22 +19,18 @@ from ultralytics import YOLO
 
 # --- Configuration ---
 MODEL_PATH = "best.pt"
-VIDEO_PATH = 0 # Ganti ke 0 untuk live webcam
-API_ENDPOINT = "http://localhost:8000/api/qc/detections"
+VIDEO_PATH = "sample_lemon.mp4"   # set to 0 for a live webcam
+API_BASE = "http://localhost:8000"
+API_ENDPOINT = f"{API_BASE}/api/qc/detections"
 CAMERA_ID = "cam_01"
-CONFIDENCE_THRESHOLD = 0.55
+CONFIDENCE_THRESHOLD = 0.45
 
-# --- Logika Multi-Object Centroid Tracker ---
-tracked_fruits = {}
-next_fruit_id = 1
-total_fruit_count = 0  
+# --- Global deduplication state ---
+processed_track_ids: set[int] = set()
 
-# --- RIWAYAT LOG UNTUK TAMPILAN LAYAR ---
-recent_logs = []  # Menyimpan maksimal 5 log terakhir
-
-# Parameter Tracker
-MAX_DISTANCE_THRESHOLD = 60  
-MAX_LOST_FRAMES = 20         
+# --- Live on-screen log (most recent dispatches) ---
+recent_logs: list[str] = []
+MAX_VISIBLE_LOGS = 5
 
 
 def reset_backend_records() -> None:
@@ -47,12 +52,40 @@ def send_payload_async(payload: dict) -> None:
     try:
         requests.post(API_ENDPOINT, json=payload, timeout=1.0)
     except requests.exceptions.RequestException:
+        # Silently handle network errors to avoid disrupting the video stream
         pass
 
 
-def main() -> None:
-    global next_fruit_id, total_fruit_count, recent_logs
+def draw_dashboard(frame, total_count: int, active_count: int):
+    """Render the QC dashboard overlay (metrics + live log panel) onto a frame."""
+    # --- Top metrics ---
+    cv2.putText(
+        frame, f"TOTAL QC: {total_count}", (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 3,
+    )
+    cv2.putText(
+        frame, f"Aktif di Kamera: {active_count}", (20, 70),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2,
+    )
 
+    # --- Live log panel (bottom-left) ---
+    cv2.rectangle(frame, (15, 300), (450, 460), (20, 20, 20), -1)
+    cv2.rectangle(frame, (15, 300), (450, 460), (100, 100, 100), 1)
+    cv2.putText(
+        frame, "SYSTEM LIVE LOGS (POST DATABASE)", (25, 320),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1, cv2.LINE_AA,
+    )
+    for idx, log in enumerate(recent_logs):
+        y_pos = 345 + (idx * 22)
+        # newest log (index 0) bright green, older logs grey
+        text_color = (0, 255, 0) if idx == 0 else (150, 150, 150)
+        cv2.putText(
+            frame, log, (25, y_pos),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_color, 1, cv2.LINE_AA,
+        )
+
+
+def main() -> None:
     # Load YOLO model
     try:
         model = YOLO(MODEL_PATH)
@@ -63,7 +96,11 @@ def main() -> None:
     # Open video capture
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
-        print(f"[ERROR] Failed to open video/webcam '{VIDEO_PATH}'.", file=sys.stderr)
+        print(
+            f"[ERROR] Failed to open video '{VIDEO_PATH}'. "
+            "Check the file exists and is a valid video.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print(f"[INFO] Model loaded: {MODEL_PATH}")
@@ -85,141 +122,84 @@ def main() -> None:
 
         frame_count += 1
 
-        # Jalankan deteksi biasa (predict mode)
-        results = model(frame, verbose=False)
-        annotated_frame = frame.copy()
+        # Run tracking inference (ByteTrack for consistent IDs across frames)
+        results = model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False)
 
-        # 1. Ekstraksi semua titik tengah (centroid) frame saat ini
-        current_frame_objects = []
+        annotated_frame = frame  # fallback if no results
+        active_count = 0          # tracks visible (above threshold) this frame
+
         for result in results:
-            annotated_frame = result.plot()  
+            # Always render the annotated frame (with or without detections)
+            annotated_frame = result.plot()
+
             boxes = result.boxes
-            if boxes is not None:
-                for box in boxes:
-                    conf = float(box.conf[0])
-                    if conf >= CONFIDENCE_THRESHOLD:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        cx = int((x1 + x2) / 2)
-                        cy = int((y1 + y2) / 2)
-                        
-                        cls_id = int(box.cls[0])
-                        class_name = model.names[cls_id]
-                        
-                        current_frame_objects.append({
-                            "centroid": (cx, cy),
-                            "class": class_name,
-                            "conf": conf,
-                            "matched": False
-                        })
+            if boxes is None or len(boxes) == 0:
+                continue
 
-        # 2. Cocokkan centroid baru dengan objek lama di memori
-        for f_id, f_data in list(tracked_fruits.items()):
-            if not current_frame_objects:
-                break
-            
-            closest_idx = -1
-            min_dist = float('inf')
-            
-            for i, current_obj in enumerate(current_frame_objects):
-                if current_obj["matched"]:
+            for box in boxes:
+                # Skip detections without a valid track ID
+                if box.id is None:
                     continue
-                
-                dist = math.dist(f_data["centroid"], current_obj["centroid"])
-                if dist < min_dist and dist < MAX_DISTANCE_THRESHOLD:
-                    min_dist = dist
-                    closest_idx = i
-            
-            if closest_idx != -1:
-                tracked_fruits[f_id]["centroid"] = current_frame_objects[closest_idx]["centroid"]
-                tracked_fruits[f_id]["lost_frames"] = 0
-                current_frame_objects[closest_idx]["matched"] = True
 
-        # 3. Jika ada objek baru, masukkan ke counter dan tracker aktif
-        for current_obj in current_frame_objects:
-            if not current_obj["matched"]:
-                tracked_fruits[next_fruit_id] = {
-                    "centroid": current_obj["centroid"],
-                    "class": current_obj["class"],
-                    "conf": current_obj["conf"],
-                    "dispatched": False,
-                    "lost_frames": 0
-                }
-                total_fruit_count += 1 
-                next_fruit_id += 1
+                track_id = int(box.id[0])
+                confidence = float(box.conf[0])
 
-        # 4. Evaluasi memori & Pengiriman API
-        for f_id, f_data in list(tracked_fruits.items()):
-            
-            # Kirim data ke Backend (Hanya 1 kali per buah)
-            if not f_data["dispatched"]:
-                time_str = datetime.now().strftime("%H:%M:%S")
+                # CRITICAL: confidence gate BEFORE touching processed_track_ids.
+                # A low-confidence detection must not consume/register a track_id,
+                # so that if the same object reappears with higher confidence later
+                # it can still be dispatched.
+                if confidence < CONFIDENCE_THRESHOLD:
+                    continue
+
+                active_count += 1
+
+                # Deduplicate: only process each track_id once
+                if track_id in processed_track_ids:
+                    continue
+
+                processed_track_ids.add(track_id)
+
+                cls_id = int(box.cls[0])
+                class_name = model.names[cls_id]
+
                 payload = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "item_class": f_data["class"],
-                    "confidence_score": round(f_data["conf"], 4),
+                    "item_class": class_name,
+                    "confidence_score": round(confidence, 4),
                     "camera_id": CAMERA_ID,
-                    "track_id": f_id  
+                    "track_id": track_id,
                 }
 
+                # Dispatch async POST (non-blocking)
                 thread = threading.Thread(
                     target=send_payload_async, args=(payload,), daemon=True
                 )
                 thread.start()
-                
-                print(f"📤 [DISPATCH] Data Sent -> ID: {f_id}")
-                tracked_fruits[f_id]["dispatched"] = True
 
-                # TAMBAHAN LOGIKA LOG: Masukkan log baru ke baris paling atas panel
-                log_text = f"[{time_str}] ID {f_id}: {f_data['class']} -> HTTP 200"
-                recent_logs.insert(0, log_text)  # Insert di indeks 0 agar log terbaru di atas
-                
-                # Batasi hanya menampilkan 5 log terakhir di layar agar tidak penuh
-                if len(recent_logs) > 5:
+                # Terminal log only for NEW dispatches
+                print(f"[DISPATCH] {json.dumps(payload)}")
+
+                # On-screen live log (newest on top, capped)
+                time_str = datetime.now().strftime("%H:%M:%S")
+                recent_logs.insert(0, f"[{time_str}] ID {track_id}: {class_name} -> HTTP 200")
+                if len(recent_logs) > MAX_VISIBLE_LOGS:
                     recent_logs.pop()
 
-            # Naikkan lost frame counter
-            tracked_fruits[f_id]["lost_frames"] += 1
-            
-            # Pembersihan memori aktif jika objek keluar frame
-            if tracked_fruits[f_id]["lost_frames"] > MAX_LOST_FRAMES:
-                del tracked_fruits[f_id]
+        # Draw dashboard overlay (total unique = size of dedup set)
+        draw_dashboard(annotated_frame, len(processed_track_ids), active_count)
 
-        # ====================================================
-        # INTERFACE OVERLAY (DASHBOARD METRICS & LOG CONSOLE)
-        # ====================================================
-        # 1. Tampilkan Indikator Utama
-        cv2.putText(annotated_frame, f"TOTAL QC: {total_fruit_count}", (20, 40), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 3)
-        cv2.putText(annotated_frame, f"Aktif di Kamera: {len(tracked_fruits)}", (20, 70), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        # Display frame
+        cv2.imshow("SIMA QC Camera", annotated_frame)
 
-        # 2. Gambar Background Kotak Semi-Transparan untuk Panel Log
-        # Posisi kotak: kiri bawah area video
-        cv2.rectangle(annotated_frame, (15, 300), (450, 460), (20, 20, 20), -1)
-        # Gambar border luar untuk kotak log
-        cv2.rectangle(annotated_frame, (15, 300), (450, 460), (100, 100, 100), 1)
-        
-        # Judul Panel Log
-        cv2.putText(annotated_frame, "SYSTEM LIVE LOGS (POST DATABASE)", (25, 320), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1, cv2.LINE_AA)
-
-        # 3. Render Baris Log ke Dalam Kotak Panel
-        for idx, log in enumerate(recent_logs):
-            y_pos = 345 + (idx * 22)  # Jarak antar baris teks log
-            # Log terbaru (indeks 0) diberi warna hijau terang, log lama warna abu-abu
-            text_color = (0, 255, 0) if idx == 0 else (150, 150, 150)
-            cv2.putText(annotated_frame, log, (25, y_pos), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_color, 1, cv2.LINE_AA)
-
-        # Tampilkan jendela video
-        cv2.imshow("SIMA QC Camera - Multi Object Mode", annotated_frame)
-
+        # Quit on 'q' keypress (1ms wait keeps stream smooth)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("[INFO] Quit signal received.")
             break
 
     cap.release()
     cv2.destroyAllWindows()
+    print(f"\n[INFO] Processed {frame_count} frames.")
+    print(f"[INFO] Unique objects tracked: {len(processed_track_ids)}")
 
 
 if __name__ == "__main__":
