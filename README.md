@@ -60,44 +60,40 @@ This directly addresses CyberHack Focus Areas **01 (Integrated Operations)** and
 | **Frontend** | Next.js (App Router), React, TypeScript, Mantine (BuildPad UI) |
 | **Hosting** | Vercel (frontend) · Railway (backend) |
 
-## Running locally
+## Usage
 
-### Prerequisites
+The dashboard and backend are **already deployed** — you don't need to run them yourself.
+You only run the **edge camera** to feed live detections.
 
-- Python 3.10+ with pip
-- Node.js 20+ with pnpm
-- A webcam, or use the bundled `sample_lemon.mp4`
-
-### Easiest way (VS Code, one click)
+### Demo (recommended) — uses the live deployment
 
 1. Open the project in VS Code.
-2. `Ctrl+Shift+P` → **Run Task** → **Run All Services** (starts the backend API + edge camera together).
-3. In a terminal, start the dashboard:
-   ```bash
-   pnpm install
-   pnpm run dev
-   ```
-4. Open **http://localhost:3000/qc-dashboard**.
+2. `Ctrl+Shift+P` → **Run Task** → **Run Edge Camera**.
+   - The camera sends detections to the hosted backend automatically.
+3. Open the live dashboard: **https://cyber-hack-2026.vercel.app/qc-dashboard**
+4. Point the camera at the material — counts update live. Press **`q`** to stop.
 
-### Manual (three terminals)
+> First run only: `pip install ultralytics opencv-python requests`
+
+That's it — no backend, no `pnpm`, nothing else to start.
+
+### Local development (only if you want to modify the code)
+
+Needed only when changing the frontend or backend source. Requires Python 3.10+, Node 20+ with pnpm.
 
 ```bash
-# 1 — Backend
-cd backend && pip install -r requirements.txt && python main.py
+# Backend (terminal 1)
+cd backend && pip install -r requirements.txt && python main.py   # http://localhost:8000
 
-# 2 — Edge camera
-pip install ultralytics opencv-python requests
+# Frontend (terminal 2)
+pnpm install && pnpm run dev                                       # http://localhost:3000
+
+# Edge camera (terminal 3) — point it at your local backend
+set QC_BACKEND_URL=http://localhost:8000
 python edge/edge_camera.py
-
-# 3 — Dashboard
-pnpm install && pnpm run dev
 ```
 
-Press **`q`** in the camera window to stop it.
-
-> By default the camera sends detections to the **hosted** backend so they appear on the live
-> dashboard. To use a local backend instead, set `QC_BACKEND_URL=http://localhost:8000` before
-> running `edge/edge_camera.py`.
+Then open **http://localhost:3000/qc-dashboard**.
 
 ## API
 
