@@ -19,7 +19,7 @@ export function KenangLogo({ size = 32 }: { size?: number }) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src="/kenang-logo.png"
+        src="/Property_1_kenang_logo_-_gradient-removebg-preview.png"
         alt="Kenang"
         height={size}
         style={{ height: size, width: "auto", display: "block" }}

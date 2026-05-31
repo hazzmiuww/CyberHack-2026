@@ -23,9 +23,9 @@ export const metadata: Metadata = {
   description:
     "AI-powered material quality sorting for Sima Arome. Real-time good/defective grading with a live QC command center.",
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png",
+    icon: "/Group 12.svg",
+    shortcut: "/Group 12.svg",
+    apple: "/Group 12.svg",
   },
 };
 
@@ -36,7 +36,7 @@ export default function RootLayout({
     <html lang="en" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript />
-        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="icon" href="/Group 12.svg" type="image/svg+xml" />
         <meta
           name="viewport"
           content="minimum-scale=1, initial-scale=1, width=device-width, user-scalable=no"
