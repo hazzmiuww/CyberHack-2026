@@ -137,6 +137,7 @@ Key constants in `edge/edge_camera.py`:
 | -------- | ------- | ----------- |
 | `MODEL_PATH` | `best.pt` | YOLOv8 model file |
 | `VIDEO_PATH` | `0` | Webcam index, or a video path like `"sample_lemon.mp4"` |
+| `CAMERA_ID` | `"cam_01"` | Label attached to every detection — change it to identify a specific camera/line (e.g. `"line_A"`, `"sorting_cam_2"`) |
 | `CONFIDENCE_THRESHOLD` | `0.45` | Minimum confidence before an item is counted |
 | `QC_BACKEND_URL` (env) | hosted Railway URL | Backend the camera sends detections to |
 
