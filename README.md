@@ -12,6 +12,9 @@ Built for CyberHack 2026.
 
 </div>
 
+> **Why "Kenang"?** From the Indonesian word for *memory / to remember* — because every piece of
+> raw material deserves to be recorded, traced, and accounted for.
+
 ---
 
 ## What it does
@@ -34,6 +37,21 @@ This directly addresses CyberHack Focus Areas **01 (Integrated Operations)** and
 
 > The dashboard shows live data once the edge camera is running and streaming detections.
 
+<!--
+  📸 SCREENSHOT: replace the line below with a screenshot or GIF of the live dashboard.
+  Easiest way: open the dashboard, take a screenshot, drag it into this file on GitHub's
+  web editor — GitHub uploads it and inserts a markdown image link automatically.
+-->
+<!-- ![Kenang dashboard](public/dashboard-screenshot.png) -->
+
+## Why it matters
+
+- **Removes the manual-QC bottleneck** — grading no longer stalls when trained inspectors aren't on shift.
+- **No double-counting** — ByteTrack assigns each item a stable ID, so one object is counted exactly once.
+- **Single source of truth** — results live in one dashboard instead of scattered spreadsheets across shifts.
+- **Auditable** — every detection is timestamped and stored, not lost in someone's notebook.
+- **Scalable to new materials** — add a labelled dataset, retrain the model, redeploy — the pipeline stays the same.
+
 ## How it works
 
 ```
@@ -50,6 +68,12 @@ This directly addresses CyberHack Focus Areas **01 (Integrated Operations)** and
 4. Each new item is sent asynchronously to the backend (no video lag).
 5. The dashboard polls the backend and shows **Total**, **Good**, **Defective**, and
    **Acceptance Rate** with a live detection log.
+
+> **On model accuracy:** the current model is an early-stage prototype trained on a limited
+> dataset, so confidence scores are modest. The `CONFIDENCE_THRESHOLD` (0.45) is intentionally
+> conservative to keep the pipeline responsive for the demo. Improving accuracy with a larger,
+> better-labelled dataset is the top item on the roadmap — the architecture (capture → detect →
+> track → store → visualize) stays exactly the same as the model improves.
 
 ## Tech stack
 
