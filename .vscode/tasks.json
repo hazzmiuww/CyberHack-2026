@@ -20,7 +20,7 @@
     {
       "label": "Run Edge Camera",
       "type": "shell",
-      "command": "python edge_camera.py",
+      "command": "python edge/edge_camera.py",
       "options": {
         "cwd": "${workspaceFolder}"
       },

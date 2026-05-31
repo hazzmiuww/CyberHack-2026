@@ -86,7 +86,7 @@ cd backend && pip install -r requirements.txt && python main.py
 
 # 2 — Edge camera
 pip install ultralytics opencv-python requests
-python edge_camera.py
+python edge/edge_camera.py
 
 # 3 — Dashboard
 pnpm install && pnpm run dev
@@ -96,7 +96,7 @@ Press **`q`** in the camera window to stop it.
 
 > By default the camera sends detections to the **hosted** backend so they appear on the live
 > dashboard. To use a local backend instead, set `QC_BACKEND_URL=http://localhost:8000` before
-> running `edge_camera.py`.
+> running `edge/edge_camera.py`.
 
 ## API
 
@@ -110,7 +110,7 @@ Full contract in [`docs/API.md`](docs/API.md).
 
 ## Configuration
 
-Key constants in `edge_camera.py`:
+Key constants in `edge/edge_camera.py`:
 
 | Constant | Default | Description |
 | -------- | ------- | ----------- |

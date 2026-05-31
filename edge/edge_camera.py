@@ -19,8 +19,13 @@ import requests
 from ultralytics import YOLO
 
 # --- Configuration ---
-MODEL_PATH = "best.pt"
-VIDEO_PATH = 0   # set to 0 for a live webcam, or "sample_lemon.mp4" for the demo video
+# Resolve paths relative to THIS script so it works no matter the working dir
+# (e.g. `python edge/edge_camera.py` from the project root).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(_HERE, "best.pt")
+# Webcam index 0 by default. To use the bundled demo clip instead, set:
+#   VIDEO_PATH = os.path.join(_HERE, "sample_lemon.mp4")
+VIDEO_PATH = 0
 # Backend base URL.
 # Default points at the deployed Railway backend so detections show up on the
 # live Vercel dashboard out of the box. Override with env var QC_BACKEND_URL

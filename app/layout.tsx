@@ -19,8 +19,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Buildpad App",
-  description: "DaaS-ready Next.js app with a token-based design system"
+  title: "Kenang — AI Material Quality QC",
+  description:
+    "AI-powered material quality sorting for Sima Arome. Real-time good/defective grading with a live QC command center.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
@@ -30,7 +36,7 @@ export default function RootLayout({
     <html lang="en" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript />
-        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.png" type="image/png" />
         <meta
           name="viewport"
           content="minimum-scale=1, initial-scale=1, width=device-width, user-scalable=no"
