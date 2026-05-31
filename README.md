@@ -12,6 +12,27 @@ pipeline feeding a centralized **Command Center** — a single source of truth f
 
 ---
 
+## 🚀 Quick Start (For Judges & Evaluators)
+
+**Want to run the entire system with one command?**
+
+### Windows Users:
+```cmd
+start-all.bat
+```
+
+**That's it!** The script will:
+- ✅ Check prerequisites
+- ✅ Install all dependencies
+- ✅ Start Backend API, Edge Camera, and Dashboard
+- ✅ Open everything in separate windows
+
+**Then open:** http://localhost:3000/qc-dashboard
+
+📖 **Full guide:** See [QUICKSTART.md](QUICKSTART.md) for detailed instructions and troubleshooting.
+
+---
+
 ## Architecture
 
 Three nodes, one data flow:
