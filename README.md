@@ -1,6 +1,7 @@
 <div align="center">
 
-<img src="public/kenang-logo.png" alt="Kenang" height="90" />
+<img width="198" height="99" alt="Property 1=kenang logo - gradient" src="https://github.com/user-attachments/assets/e5ac66dc-48b6-4f10-bb1a-9f3342d371b9" />
+
 
 # Kenang — AI Material Quality Sorting
 
