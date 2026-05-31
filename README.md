@@ -12,27 +12,6 @@ pipeline feeding a centralized **Command Center** — a single source of truth f
 
 ---
 
-## 🚀 Quick Start (For Judges & Evaluators)
-
-**Want to run the entire system with one command?**
-
-### Windows Users:
-```cmd
-start-all.bat
-```
-
-**That's it!** The script will:
-- ✅ Check prerequisites
-- ✅ Install all dependencies
-- ✅ Start Backend API, Edge Camera, and Dashboard
-- ✅ Open everything in separate windows
-
-**Then open:** http://localhost:3000/qc-dashboard
-
-📖 **Full guide:** See [QUICKSTART.md](QUICKSTART.md) for detailed instructions and troubleshooting.
-
----
-
 ## Architecture
 
 Three nodes, one data flow:
@@ -49,7 +28,7 @@ Three nodes, one data flow:
 | ---- | ---- | ---- | ------ |
 | **A — Edge** | Detects & grades lemons from a video stream, sends results | Python, OpenCV, Ultralytics YOLOv8, ByteTrack | ✅ Done |
 | **B — Backend** | Receives detections, stores them, serves metrics | FastAPI, SQLAlchemy, SQLite | ✅ Done |
-| **C — Command Center** | Real-time QC dashboard (metric cards + log table) | Next.js, BuildPad | 🚧 In progress |
+| **C — Command Center** | Real-time QC dashboard (metric cards + log table) | Next.js, BuildPad | ✅ Done |
 
 ---
 
@@ -62,8 +41,12 @@ sample_lemon.mp4      # Demo input video
 backend/
   ├── main.py         # Node B — FastAPI app (API)
   └── requirements.txt
+app/                  # Node C — Next.js pages & routes
+components/           # React UI components
 docs/
   └── API.md          # Full API contract (read this for frontend integration)
+.vscode/
+  └── tasks.json      # VS Code tasks to run services
 ```
 
 ---
@@ -86,9 +69,26 @@ docs/
 
 ## Running locally
 
-You need **two terminals**: one for the backend, one for the camera.
+### Prerequisites
 
-### 1. Backend (Node B)
+- **Python 3.8+** with pip
+- **Node.js 24 LTS** with pnpm
+- A webcam (or use the included `sample_lemon.mp4`)
+
+### Quick Start (VS Code)
+
+Open the project in VS Code, then:
+
+1. Press `Ctrl+Shift+P` → **"Run Task"** → **"Run All Services"**
+2. Two terminals open automatically:
+   - **Backend API** — `python backend/main.py`
+   - **Edge Camera** — `python edge_camera.py`
+3. Open a third terminal and run: `pnpm run dev`
+4. Open **http://localhost:3000/qc-dashboard** in your browser
+
+### Manual Start (any terminal)
+
+**Terminal 1 — Backend (Node B):**
 
 ```bash
 cd backend
@@ -96,12 +96,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Backend starts on `http://localhost:8000`. Interactive API docs at `http://localhost:8000/docs`.
-Leave this running.
+Backend starts on `http://localhost:8000`. API docs at `http://localhost:8000/docs`.
 
-### 2. Edge camera (Node A)
-
-In a second terminal:
+**Terminal 2 — Edge Camera (Node A):**
 
 ```bash
 pip install ultralytics opencv-python requests
@@ -109,11 +106,15 @@ python edge_camera.py
 ```
 
 A window opens playing `sample_lemon.mp4` with detection boxes. Press **`q`** to quit.
-Detections stream into the backend automatically.
 
-### 3. View the data
+**Terminal 3 — Dashboard (Node C):**
 
-Open `http://localhost:8000/api/inventory` in a browser, or use the Swagger UI at `/docs`.
+```bash
+pnpm install
+pnpm run dev
+```
+
+Dashboard at `http://localhost:3000/qc-dashboard`.
 
 ---
 

@@ -114,7 +114,7 @@ def main() -> None:
     print(f"[INFO] Sending detections to: {API_ENDPOINT}")
 
     # Start each run from a clean slate on the backend
-    reset_backend_records()
+    # reset_backend_records()
 
     print(f"[INFO] Press 'q' to quit.\n")
 
