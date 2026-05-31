@@ -42,7 +42,8 @@ This directly addresses CyberHack Focus Areas **01 (Integrated Operations)** and
   Easiest way: open the dashboard, take a screenshot, drag it into this file on GitHub's
   web editor — GitHub uploads it and inserts a markdown image link automatically.
 -->
-<!-- ![Kenang dashboard](public/dashboard-screenshot.png) -->
+<img width="1289" height="1034" alt="image" src="https://github.com/user-attachments/assets/65ba0c20-c630-49c8-ba66-505fba43c187" />
+
 
 ## Why it matters
 
