@@ -1,151 +1,126 @@
-# Sima Arome Integrated QC System
+<div align="center">
 
-An end-to-end **AI Quality Control system** for Sima Arome, a natural extracts manufacturer.
-Built for **CyberHack 2026**.
+<img src="public/kenang-logo.png" alt="Kenang" height="90" />
 
-It replaces manual, eyeball-based QC and fragmented spreadsheets with an automated computer-vision
-pipeline feeding a centralized **Command Center** — a single source of truth for material quality.
+# Kenang — AI Material Quality Sorting
 
-> **Problem addressed (CyberHack Focus Areas 01 + 02):** manual QC bottlenecks and fragmented
-> systems. Incoming material is graded automatically by AI, and results flow into one dashboard
-> instead of living in notebooks and spreadsheets.
+**Automated visual quality control for Sima Arome, a natural-extracts manufacturer.**
+Built for CyberHack 2026.
 
----
+[Live Dashboard](https://cyber-hack-2026.vercel.app/qc-dashboard) · [API](https://cyberhack-2026-production.up.railway.app/)
 
-## Architecture
-
-Three nodes, one data flow:
-
-```
-┌────────────────────┐     POST /api/qc/detections     ┌────────────────────┐     GET /api/inventory     ┌────────────────────┐
-│   NODE A: Edge      │ ──────────────────────────────> │   NODE B: Backend  │ <───────────────────────── │  NODE C: Command   │
-│   (AI Vision)       │                                  │   (FastAPI + DB)   │                            │  Center (Next.js)  │
-│  YOLOv8 + ByteTrack │                                  │   SQLite store     │                            │   Live dashboard   │
-└────────────────────┘                                  └────────────────────┘                            └────────────────────┘
-```
-
-| Node | Role | Tech | Status |
-| ---- | ---- | ---- | ------ |
-| **A — Edge** | Detects & grades lemons from a video stream, sends results | Python, OpenCV, Ultralytics YOLOv8, ByteTrack | ✅ Done |
-| **B — Backend** | Receives detections, stores them, serves metrics | FastAPI, SQLAlchemy, SQLite | ✅ Done |
-| **C — Command Center** | Real-time QC dashboard (metric cards + log table) | Next.js, BuildPad | ✅ Done |
+</div>
 
 ---
 
-## Repository layout
+## What it does
 
-```
-edge_camera.py        # Node A — AI vision + tracking, dispatches detections
-best.pt               # Custom-trained YOLOv8 model (material_bagus / material_rusak)
-sample_lemon.mp4      # Demo input video
-backend/
-  ├── main.py         # Node B — FastAPI app (API)
-  └── requirements.txt
-app/                  # Node C — Next.js pages & routes
-components/           # React UI components
-docs/
-  └── API.md          # Full API contract (read this for frontend integration)
-.vscode/
-  └── tasks.json      # VS Code tasks to run services
-```
+Sima Arome grades incoming raw materials (e.g. fruit) by eye — slow, inconsistent, and a
+bottleneck when trained staff aren't available. **Kenang** replaces that with an AI camera that
+classifies each item as **good** (`material_bagus`) or **defective** (`material_rusak`) in real
+time, and streams the results to a live web dashboard — one source of truth instead of notebooks
+and spreadsheets.
 
----
+This directly addresses CyberHack Focus Areas **01 (Integrated Operations)** and
+**02 (AI for Raw-Material QC)**.
+
+## Live demo
+
+| Service | URL |
+| ------- | --- |
+| **Dashboard** (Command Center) | https://cyber-hack-2026.vercel.app/qc-dashboard |
+| **Backend API** | https://cyberhack-2026-production.up.railway.app/ |
+
+> The dashboard shows live data once the edge camera is running and streaming detections.
 
 ## How it works
 
-1. **Node A** runs the YOLOv8 model (`best.pt`) on a video stream, classifying each item as
-   `material_bagus` (good) or `material_rusak` (defective).
-2. **ByteTrack** assigns a stable `track_id` to each object so the same item isn't counted twice.
-3. A confidence gate (`CONFIDENCE_THRESHOLD = 0.45`) filters out weak detections before tracking.
-4. For every newly tracked object, Node A fires an **async** `POST` to Node B so the video stream
-   never stalls (no frame drops).
-5. **Node B** stores each detection and exposes aggregated metrics.
-6. **Node C** polls the backend and renders a live dashboard: Total, Bagus, Rusak, and Acceptance Rate.
+```
+┌─────────────────────┐   POST detections   ┌────────────────────┐   GET inventory   ┌─────────────────────┐
+│  Edge Camera (AI)   │ ──────────────────> │   Backend API      │ <──────────────── │  Command Center      │
+│  YOLOv8 + ByteTrack │                     │   FastAPI + SQLite │                   │  Next.js dashboard   │
+└─────────────────────┘                     └────────────────────┘                   └─────────────────────┘
+   runs on a device                            hosted on Railway                        hosted on Vercel
+```
 
-> Each detection run resets the backend first (`DELETE /api/qc/detections`), so the dashboard always
-> reflects a single clean session — ideal for demos.
+1. The AI camera runs a custom **YOLOv8** model (`best.pt`) on a camera/video feed.
+2. **ByteTrack** assigns each item a stable ID so the same object is never counted twice.
+3. A confidence gate (≥ 0.45) filters out weak detections before counting.
+4. Each new item is sent asynchronously to the backend (no video lag).
+5. The dashboard polls the backend and shows **Total**, **Good**, **Defective**, and
+   **Acceptance Rate** with a live detection log.
 
----
+## Tech stack
+
+| Layer | Technology |
+| ----- | ---------- |
+| **AI / Vision** | Python, OpenCV, Ultralytics YOLOv8, ByteTrack |
+| **Backend** | FastAPI, SQLAlchemy, SQLite |
+| **Frontend** | Next.js (App Router), React, TypeScript, Mantine (BuildPad UI) |
+| **Hosting** | Vercel (frontend) · Railway (backend) |
 
 ## Running locally
 
 ### Prerequisites
 
-- **Python 3.8+** with pip
-- **Node.js 24 LTS** with pnpm
-- A webcam (or use the included `sample_lemon.mp4`)
+- Python 3.10+ with pip
+- Node.js 20+ with pnpm
+- A webcam, or use the bundled `sample_lemon.mp4`
 
-### Quick Start (VS Code)
+### Easiest way (VS Code, one click)
 
-Open the project in VS Code, then:
+1. Open the project in VS Code.
+2. `Ctrl+Shift+P` → **Run Task** → **Run All Services** (starts the backend API + edge camera together).
+3. In a terminal, start the dashboard:
+   ```bash
+   pnpm install
+   pnpm run dev
+   ```
+4. Open **http://localhost:3000/qc-dashboard**.
 
-1. Press `Ctrl+Shift+P` → **"Run Task"** → **"Run All Services"**
-2. Two terminals open automatically:
-   - **Backend API** — `python backend/main.py`
-   - **Edge Camera** — `python edge_camera.py`
-3. Open a third terminal and run: `pnpm run dev`
-4. Open **http://localhost:3000/qc-dashboard** in your browser
-
-### Manual Start (any terminal)
-
-**Terminal 1 — Backend (Node B):**
+### Manual (three terminals)
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python main.py
-```
+# 1 — Backend
+cd backend && pip install -r requirements.txt && python main.py
 
-Backend starts on `http://localhost:8000`. API docs at `http://localhost:8000/docs`.
-
-**Terminal 2 — Edge Camera (Node A):**
-
-```bash
+# 2 — Edge camera
 pip install ultralytics opencv-python requests
 python edge_camera.py
+
+# 3 — Dashboard
+pnpm install && pnpm run dev
 ```
 
-A window opens playing `sample_lemon.mp4` with detection boxes. Press **`q`** to quit.
+Press **`q`** in the camera window to stop it.
 
-**Terminal 3 — Dashboard (Node C):**
-
-```bash
-pnpm install
-pnpm run dev
-```
-
-Dashboard at `http://localhost:3000/qc-dashboard`.
-
----
+> By default the camera sends detections to the **hosted** backend so they appear on the live
+> dashboard. To use a local backend instead, set `QC_BACKEND_URL=http://localhost:8000` before
+> running `edge_camera.py`.
 
 ## API
 
-See **[`docs/API.md`](docs/API.md)** for the complete request/response contract.
+Full contract in [`docs/API.md`](docs/API.md).
 
-Key endpoints:
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `POST` | `/api/qc/detections` | Camera submits a detection |
+| `GET`  | `/api/inventory` | Counts, acceptance rate, detection list |
+| `GET`  | `/api/inventory/stats` | Aggregated stats per class |
 
-| Method | Path                   | Purpose                       |
-| ------ | ---------------------- | ----------------------------- |
-| `POST` | `/api/qc/detections`   | Edge Node submits a detection |
-| `GET`  | `/api/inventory`       | Metrics + detection list      |
-| `GET`  | `/api/inventory/stats` | Aggregated stats per class    |
+## Configuration
 
----
+Key constants in `edge_camera.py`:
 
-## Edge Node configuration
-
-Tunable constants at the top of `edge_camera.py`:
-
-| Constant               | Default                                | Description                              |
-| ---------------------- | -------------------------------------- | ---------------------------------------- |
-| `MODEL_PATH`           | `best.pt`                              | YOLOv8 model file                        |
-| `VIDEO_PATH`           | `sample_lemon.mp4`                     | Input video (swap for a camera index)    |
-| `API_BASE`             | `http://localhost:8000`                | Backend base URL                         |
-| `CONFIDENCE_THRESHOLD` | `0.45`                                 | Minimum confidence before tracking       |
-| `CAMERA_ID`            | `cam_01`                               | Identifier tagged on each detection      |
+| Constant | Default | Description |
+| -------- | ------- | ----------- |
+| `MODEL_PATH` | `best.pt` | YOLOv8 model file |
+| `VIDEO_PATH` | `0` | Webcam index, or a video path like `"sample_lemon.mp4"` |
+| `CONFIDENCE_THRESHOLD` | `0.45` | Minimum confidence before an item is counted |
+| `QC_BACKEND_URL` (env) | hosted Railway URL | Backend the camera sends detections to |
 
 ---
 
-## Team
-
-Built for CyberHack 2026 · Sima Arome challenge.
+<div align="center">
+Built for CyberHack 2026 · Sima Arome challenge
+</div>

@@ -12,6 +12,10 @@
 # Misc
 .DS_Store
 *.pem
+# Stray downloads / scratch files
+download*.mp4
+download*.png
+download*.jpg
 
 # Debug
 npm-debug.log*
